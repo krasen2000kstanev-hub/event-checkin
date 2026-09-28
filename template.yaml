@@ -1,0 +1,174 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Private event check-in and matchmaking MVP
+
+Parameters:
+  AllowedOrigin:
+    Type: String
+    Default: '*'
+    Description: Exact frontend origin in production, for example https://org.github.io/repository
+  RegistrationApiUrl:
+    Type: String
+    Default: ''
+  RegistrationApiToken:
+    Type: String
+    Default: ''
+    NoEcho: true
+
+Globals:
+  Function:
+    Runtime: nodejs22.x
+    Timeout: 10
+    MemorySize: 256
+    Environment:
+      Variables:
+        TABLE_NAME: !Ref EventTable
+        ALLOWED_ORIGIN: !Ref AllowedOrigin
+        REGISTRATION_API_URL: !Ref RegistrationApiUrl
+        REGISTRATION_API_TOKEN: !Ref RegistrationApiToken
+  Api:
+    Cors: !Sub "'${AllowedOrigin}'"
+    Auth:
+      DefaultAuthorizer: CognitoAuthorizer
+      Authorizers:
+        CognitoAuthorizer:
+          UserPoolArn: !GetAtt StaffUserPool.Arn
+          Identity:
+            Header: Authorization
+
+Resources:
+  StaffUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: event-checkin-staff
+      UsernameAttributes:
+        - email
+      AutoVerifiedAttributes:
+        - email
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: true
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 10
+          RequireUppercase: true
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+
+  StaffUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId: !Ref StaffUserPool
+      ClientName: event-checkin-web
+      GenerateSecret: false
+      ExplicitAuthFlows:
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+        - ALLOW_USER_SRP_AUTH
+
+  AdminsGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: Admins
+      UserPoolId: !Ref StaffUserPool
+      Description: Event administrators
+
+  EventTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PROVISIONED
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+        - AttributeName: GSI1PK
+          AttributeType: S
+        - AttributeName: GSI1SK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: GSI1
+          KeySchema:
+            - AttributeName: GSI1PK
+              KeyType: HASH
+            - AttributeName: GSI1SK
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+          ProvisionedThroughput:
+            ReadCapacityUnits: 5
+            WriteCapacityUnits: 5
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: false
+
+  ApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: backend/
+      Handler: app.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref EventTable
+      Events:
+        ListEvents:
+          Type: Api
+          Properties:
+            Path: /events
+            Method: GET
+        CreateEvent:
+          Type: Api
+          Properties:
+            Path: /events
+            Method: POST
+        Sync:
+          Type: Api
+          Properties:
+            Path: /events/{eventId}/sync
+            Method: POST
+        Scan:
+          Type: Api
+          Properties:
+            Path: /events/{eventId}/scan
+            Method: POST
+        Attendees:
+          Type: Api
+          Properties:
+            Path: /events/{eventId}/attendees
+            Method: GET
+        Dashboard:
+          Type: Api
+          Properties:
+            Path: /events/{eventId}/dashboard
+            Method: GET
+        Recommendations:
+          Type: Api
+          Properties:
+            Path: /events/{eventId}/attendees/{attendeeId}/recommendations
+            Method: GET
+        Routing:
+          Type: Api
+          Properties:
+            Path: /events/{eventId}/attendees/{attendeeId}/routing
+            Method: PATCH
+        MatchAction:
+          Type: Api
+          Properties:
+            Path: /events/{eventId}/matches/{matchId}/complete
+            Method: POST
+
+Outputs:
+  ApiUrl:
+    Description: API base URL
+    Value: !Sub https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod
+  UserPoolId:
+    Value: !Ref StaffUserPool
+  UserPoolClientId:
+    Value: !Ref StaffUserPoolClient
