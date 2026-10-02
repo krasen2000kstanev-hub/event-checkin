@@ -78,8 +78,8 @@ async function syncEvent(eventId) {
   if (!Array.isArray(attendees)) throw new Error('Registration API must return an attendees array');
   for (const attendee of attendees) {
     const id = attendee.id;
-    const accessCode = String(attendee.access_code || attendee.accessCode || attendee.ticket_code || attendee.ticketCode || attendee.code || '').trim();
-    if (!id || !/^\d{4}$/.test(accessCode) || !attendee.name) continue;
+    const accessCode = String(attendee.access_code || attendee.accessCode || attendee.ticket_code || attendee.ticketCode || attendee.code || '').trim().toUpperCase();
+    if (!id || !/^[A-Z0-9]{4}$/.test(accessCode) || !attendee.name) continue;
     const formData = attendee.formData || attendee.form_data || attendee.answers || attendee.responses || {};
     await db.send(new PutCommand({ TableName, Item: { ...key(eventId, `ATTENDEE#${id}`), entity: 'ATTENDEE', id, accessCode, name: attendee.name, email: attendee.email, company: attendee.company, role: attendee.role, industry: attendee.industry, interests: attendee.interests || [], goals: attendee.goals || [], needs: attendee.needs || [], offers: attendee.offers || [], formData, type: attendee.type, updatedAt: new Date().toISOString() } }));
   }
@@ -112,7 +112,7 @@ exports.handler = async (event) => {
       const attendees = await eventItems(eventId); return json(200, { registered: attendees.length, checkedIn: attendees.filter(x => x.checkedInAt).length, attendees });
     }
     if (method === 'POST' && path.endsWith('/scan')) {
-      const { accessCode } = body(event); if (!/^\d{4}$/.test(String(accessCode || ''))) return json(400, { error: 'A 4-digit accessCode is required' });
+      const accessCode = String(body(event).accessCode || '').trim().toUpperCase(); if (!/^[A-Z0-9]{4}$/.test(accessCode)) return json(400, { error: 'A 4-character accessCode is required' });
       const attendees = await eventItems(eventId); const attendee = attendees.find(x => x.accessCode === accessCode);
       if (!attendee) return json(404, { error: 'Access code is not registered for this event' });
       if (!attendee.checkedInAt) {

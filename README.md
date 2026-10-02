@@ -1,6 +1,6 @@
 # Event Check-in PWA
 
-Private 4-digit code check-in and networking assistant for events.
+Private 4-character access-code check-in and networking assistant for events.
 
 ## Repository layout
 
@@ -16,7 +16,7 @@ npm install
 npm run dev
 ```
 
-The frontend starts in mock mode when `VITE_MOCK_MODE=true` or when no API URL is configured. Mock mode demonstrates event selection, 4-digit code lookup, check-in, routing, and recommendations without AWS credentials.
+The frontend starts in mock mode when `VITE_MOCK_MODE=true` or when no API URL is configured. Mock mode demonstrates event selection, 4-character access-code lookup, check-in, routing, and recommendations without AWS credentials.
 
 ## AWS deployment
 
@@ -61,7 +61,7 @@ The workflow intentionally sets `VITE_MOCK_MODE=false`. The Pages site must be s
 
 ## Production checks
 
-- Test 4-digit code entry on both Android Chrome and iPhone Safari.
+- Test 4-character code entry on both Android Chrome and iPhone Safari. Codes use uppercase `A-Z` and `0-9`, for example `A7K2`.
 - The registration API must return the code as `access_code`, `accessCode`, `ticket_code`, `ticketCode`, or `code`.
 - Test repeated and simultaneous scans; the backend uses a conditional DynamoDB update so only the first scan creates the check-in.
 - Configure an AWS Budget alert in the AWS console before the first real event.

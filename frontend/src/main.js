@@ -9,9 +9,9 @@ const cognitoUrl = cognitoRegion ? `https://cognito-idp.${cognitoRegion}.amazona
 const state = { eventId: 'demo', events: [{ id: 'demo', name: 'Demo networking event', routingEnabled: true, tableCount: 12, tableCapacity: 8, staff: ['Красен Станев', 'Елена Петрова'] }], attendees: [], selected: null, query: '', filter: 'all', currentStaff: 'Красен Станев' };
 
 const demoAttendees = [
-  { id: 'a1', accessCode: '4821', name: 'Анна Георгиева', email: 'anna@example.com', company: 'Alpha Studio', role: 'Основател', industry: 'SaaS', interests: ['автоматизация', 'инвестиции'], goals: ['партньори'], needs: ['продажби'], offers: ['технологии'], formData: { 'Предпочитан тип контакт': 'Стратегически партньор', 'Град': 'София' } },
-  { id: 'a2', accessCode: '7354', name: 'Николай Иванов', email: 'nikolay@example.com', company: 'Beta Labs', role: 'CEO', industry: 'SaaS', interests: ['автоматизация', 'продажби'], goals: ['партньори'], needs: ['технологии'], offers: ['продажби'], formData: { 'Предпочитан тип контакт': 'Нови клиенти', 'Град': 'София' } },
-  { id: 'a3', accessCode: '1906', name: 'Мария Петрова', email: 'maria@example.com', company: 'People Co', role: 'HR директор', industry: 'HR Tech', interests: ['автоматизация'], goals: ['нови решения'], needs: ['технологии'], offers: ['HR експертиза'], formData: { 'Предпочитан тип контакт': 'Иновации', 'Град': 'Пловдив' } }
+  { id: 'a1', accessCode: 'A7K2', name: 'Анна Георгиева', email: 'anna@example.com', company: 'Alpha Studio', role: 'Основател', industry: 'SaaS', interests: ['автоматизация', 'инвестиции'], goals: ['партньори'], needs: ['продажби'], offers: ['технологии'], formData: { 'Предпочитан тип контакт': 'Стратегически партньор', 'Град': 'София' } },
+  { id: 'a2', accessCode: 'M4P8', name: 'Николай Иванов', email: 'nikolay@example.com', company: 'Beta Labs', role: 'CEO', industry: 'SaaS', interests: ['автоматизация', 'продажби'], goals: ['партньори'], needs: ['технологии'], offers: ['продажби'], formData: { 'Предпочитан тип контакт': 'Нови клиенти', 'Град': 'София' } },
+  { id: 'a3', accessCode: 'Q2R9', name: 'Мария Петрова', email: 'maria@example.com', company: 'People Co', role: 'HR директор', industry: 'HR Tech', interests: ['автоматизация'], goals: ['нови решения'], needs: ['технологии'], offers: ['HR експертиза'], formData: { 'Предпочитан тип контакт': 'Иновации', 'Град': 'Пловдив' } }
 ];
 
 function el(selector) { return document.querySelector(selector); }
@@ -37,7 +37,7 @@ function render() {
         <section class="toolbar"><select id="eventSelect">${state.events.map(e => `<option value="${e.id}" ${e.id === state.eventId ? 'selected' : ''}>${e.name}</option>`).join('')}</select><button class="btn btn-primary" id="sync">Синхронизирай</button><button class="btn" id="logout">Изход</button></section>
         <section class="stats-grid"><div class="stat-card"><span>Записани гости</span><strong id="registeredStat">0</strong></div><div class="stat-card stat-success"><span>Дошли гости</span><strong id="checkedInStat">0</strong></div><div class="stat-card"><span>Остават</span><strong id="remainingStat">0</strong></div><div class="stat-card"><span>Заети маси</span><strong id="usedTablesStat">${tables.usedTables}/${tables.total || '—'}</strong></div></section>
         <section class="event-meta card"><div><small>КАПАЦИТЕТ НА СЪБИТИЕТО</small><strong id="capacityStat">${tables.usedSeats}/${tables.capacity || '—'} места</strong><span>${tables.total || '—'} маси · ${event.tableCapacity || '—'} места на маса</span></div><div><small>ЕКИП НА СЪБИТИЕТО</small><strong>${text((event.staff || [state.currentStaff]).join(', '))}</strong><span>Текущ потребител: ${text(state.currentStaff)}</span></div></section>
-        <section class="scanner card reveal"><div class="section-heading"><div><small>ВХОД</small><h2>Въведи код за достъп</h2></div><span class="status status-neutral">Готово</span></div><p class="muted">Четирицифреният код е в имейла с билета на участника.</p><div class="manual access-code"><input id="accessCode" inputmode="numeric" autocomplete="one-time-code" maxlength="4" pattern="[0-9]{4}" placeholder="0000" aria-label="Четирицифрен код" /><button class="btn btn-primary" id="checkCode">Провери</button></div><p id="status" class="muted">Готово за проверка.</p></section>
+        <section class="scanner card reveal"><div class="section-heading"><div><small>ВХОД</small><h2>Въведи код за достъп</h2></div><span class="status status-neutral">Готово</span></div><p class="muted">Четирисимволният код с главни букви и цифри е в имейла с билета.</p><div class="manual access-code"><input id="accessCode" inputmode="text" autocapitalize="characters" autocomplete="one-time-code" spellcheck="false" maxlength="4" pattern="[A-Z0-9]{4}" placeholder="A7K2" aria-label="Четирисимволен код" /><button class="btn btn-primary" id="checkCode">Провери</button></div><p id="status" class="muted">Готово за проверка.</p></section>
         <section id="result" class="card result-card hidden"></section>
         <section class="card reveal"><div class="row"><div><small>LIVE ROSTER</small><h2>Присъстващи</h2></div><span id="count" class="status status-neutral"></span></div><div class="roster-tools"><input id="attendeeSearch" placeholder="Търси име или компания" /><select id="attendeeFilter"><option value="all">Всички</option><option value="checked">Дошли</option><option value="pending">Чакаме</option></select></div><div id="attendees"></div></section>
       </main>
@@ -82,6 +82,7 @@ function bind() {
   el('#attendeeSearch').oninput = e => { state.query = e.target.value; updateList(); };
   el('#attendeeFilter').onchange = e => { state.filter = e.target.value; updateList(); };
   el('#checkCode').onclick = () => scan(el('#accessCode').value.trim());
+  el('#accessCode').oninput = e => { e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4); };
   el('#accessCode').onkeydown = e => { if (e.key === 'Enter') scan(e.target.value.trim()); };
 }
 async function request(path, options = {}) {
@@ -106,7 +107,8 @@ function showResult(attendee, recommendations = []) {
   el('#saveRoute').onclick = async () => { const target = el('#route').value.trim(); if (!mock) await request(`/events/${state.eventId}/attendees/${attendee.id}/routing`, { method: 'PATCH', body: JSON.stringify({ target }) }); attendee.routingTarget = target; showStatus('Насочването е запазено.'); };
 }
 async function scan(accessCode) {
-  if (!/^\d{4}$/.test(accessCode)) return showStatus('Въведи точно 4 цифри.', true);
+  accessCode = accessCode.toUpperCase();
+  if (!/^[A-Z0-9]{4}$/.test(accessCode)) return showStatus('Въведи точно 4 главни букви или цифри.', true);
   try {
     const result = mock ? (() => { const attendee = state.attendees.find(a => a.accessCode === accessCode); if (!attendee) throw new Error('Кодът не е регистриран за това събитие.'); attendee.checkedInAt ||= new Date().toISOString(); return { attendee, recommendations: state.attendees.filter(a => a.checkedInAt && a.id !== attendee.id).slice(0, 5).map(a => ({ ...a, score: 80, reason: 'demo общи интереси' })) }; })() : await request(`/events/${state.eventId}/scan`, { method: 'POST', body: JSON.stringify({ accessCode }) });
     state.selected = result.attendee; updateList(); showResult(result.attendee, result.recommendations); showStatus('Кодът е проверен успешно.');
