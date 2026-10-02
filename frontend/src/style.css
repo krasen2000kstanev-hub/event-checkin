@@ -42,7 +42,7 @@ input:hover, select:hover { border-color: #9eafc8; }
 input:focus, select:focus { border-color: var(--info); outline: 3px solid rgba(111,162,232,.18); }
 .scanner-frame { display: block; width: 100%; min-height: 190px; max-height: 360px; margin-bottom: 12px; object-fit: cover; border: 4px solid #9db6d9; border-radius: 14px; background: var(--bg); }
 .section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }.scanner-viewport { position: relative; }.scan-guide { position: absolute; inset: 50% auto auto 50%; transform: translate(-50%, -50%); width: min(210px, 55%); height: 110px; border: 2px solid rgba(255,255,255,.85); border-radius: 14px; color: white; background: rgba(23,25,31,.5); display: grid; place-items: center; padding: 12px; text-align: center; font-size: 12px; pointer-events: none; }.result-card { border: 2px solid var(--success); background: #eefbf3; }.result-banner { display: flex; align-items: center; gap: 10px; }.result-banner h2 { margin: 4px 0 0; }.result-icon { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 50%; background: var(--success); color: #fff; font-size: 22px; font-weight: 700; }.result-banner .status { margin-left: auto; }
-.manual { display: flex; gap: 8px; margin-top: 12px; }
+.manual { display: flex; gap: 8px; margin-top: 12px; }.access-code input { max-width: 180px; letter-spacing: .3em; font-size: 24px; font-weight: 700; text-align: center; }
 .manual button { white-space: nowrap; }
 .attendee-row, .recommendation { padding: 12px 0; border-top: 1px solid rgba(210,221,236,.9); }
 .attendee-row span, .recommendation span { display: block; margin-top: 4px; color: var(--text-muted-light); font-size: 13px; }

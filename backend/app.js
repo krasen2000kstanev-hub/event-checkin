@@ -77,10 +77,10 @@ async function syncEvent(eventId) {
   const attendees = payload.attendees || payload;
   if (!Array.isArray(attendees)) throw new Error('Registration API must return an attendees array');
   for (const attendee of attendees) {
-    const id = attendee.id || attendee.qr_id || attendee.qrId;
-    const qrId = attendee.qr_id || attendee.qrId;
-    if (!id || !qrId || !attendee.name) continue;
-    await db.send(new PutCommand({ TableName, Item: { ...key(eventId, `ATTENDEE#${id}`), entity: 'ATTENDEE', id, qrId, name: attendee.name, email: attendee.email, company: attendee.company, role: attendee.role, industry: attendee.industry, interests: attendee.interests || [], goals: attendee.goals || [], needs: attendee.needs || [], offers: attendee.offers || [], type: attendee.type, updatedAt: new Date().toISOString() } }));
+    const id = attendee.id;
+    const accessCode = String(attendee.access_code || attendee.accessCode || attendee.ticket_code || attendee.ticketCode || attendee.code || '').trim();
+    if (!id || !/^\d{4}$/.test(accessCode) || !attendee.name) continue;
+    await db.send(new PutCommand({ TableName, Item: { ...key(eventId, `ATTENDEE#${id}`), entity: 'ATTENDEE', id, accessCode, name: attendee.name, email: attendee.email, company: attendee.company, role: attendee.role, industry: attendee.industry, interests: attendee.interests || [], goals: attendee.goals || [], needs: attendee.needs || [], offers: attendee.offers || [], type: attendee.type, updatedAt: new Date().toISOString() } }));
   }
   return { imported: attendees.length, mode: 'api' };
 }
@@ -111,9 +111,9 @@ exports.handler = async (event) => {
       const attendees = await eventItems(eventId); return json(200, { registered: attendees.length, checkedIn: attendees.filter(x => x.checkedInAt).length, attendees });
     }
     if (method === 'POST' && path.endsWith('/scan')) {
-      const { qrId } = body(event); if (!qrId) return json(400, { error: 'qrId is required' });
-      const attendees = await eventItems(eventId); const attendee = attendees.find(x => x.qrId === qrId || x.id === qrId);
-      if (!attendee) return json(404, { error: 'QR code is not registered for this event' });
+      const { accessCode } = body(event); if (!/^\d{4}$/.test(String(accessCode || ''))) return json(400, { error: 'A 4-digit accessCode is required' });
+      const attendees = await eventItems(eventId); const attendee = attendees.find(x => x.accessCode === accessCode);
+      if (!attendee) return json(404, { error: 'Access code is not registered for this event' });
       if (!attendee.checkedInAt) {
         const now = new Date().toISOString();
         try {

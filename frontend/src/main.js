@@ -9,9 +9,9 @@ const cognitoUrl = cognitoRegion ? `https://cognito-idp.${cognitoRegion}.amazona
 const state = { eventId: 'demo', events: [{ id: 'demo', name: 'Demo networking event', routingEnabled: true }], attendees: [], selected: null, query: '', filter: 'all' };
 
 const demoAttendees = [
-  { id: 'a1', qrId: 'DEMO-001', name: 'Анна Георгиева', company: 'Alpha Studio', role: 'Основател', industry: 'SaaS', interests: ['автоматизация', 'инвестиции'], goals: ['партньори'], needs: ['продажби'], offers: ['технологии'] },
-  { id: 'a2', qrId: 'DEMO-002', name: 'Николай Иванов', company: 'Beta Labs', role: 'CEO', industry: 'SaaS', interests: ['автоматизация', 'продажби'], goals: ['партньори'], needs: ['технологии'], offers: ['продажби'] },
-  { id: 'a3', qrId: 'DEMO-003', name: 'Мария Петрова', company: 'People Co', role: 'HR директор', industry: 'HR Tech', interests: ['автоматизация'], goals: ['нови решения'], needs: ['технологии'], offers: ['HR експертиза'] }
+  { id: 'a1', accessCode: '4821', name: 'Анна Георгиева', company: 'Alpha Studio', role: 'Основател', industry: 'SaaS', interests: ['автоматизация', 'инвестиции'], goals: ['партньори'], needs: ['продажби'], offers: ['технологии'] },
+  { id: 'a2', accessCode: '7354', name: 'Николай Иванов', company: 'Beta Labs', role: 'CEO', industry: 'SaaS', interests: ['автоматизация', 'продажби'], goals: ['партньори'], needs: ['технологии'], offers: ['продажби'] },
+  { id: 'a3', accessCode: '1906', name: 'Мария Петрова', company: 'People Co', role: 'HR директор', industry: 'HR Tech', interests: ['автоматизация'], goals: ['нови решения'], needs: ['технологии'], offers: ['HR експертиза'] }
 ];
 
 function el(selector) { return document.querySelector(selector); }
@@ -22,7 +22,7 @@ function render() {
       <main class="workspace">
         <section class="toolbar"><select id="eventSelect">${state.events.map(e => `<option value="${e.id}" ${e.id === state.eventId ? 'selected' : ''}>${e.name}</option>`).join('')}</select><button class="btn btn-primary" id="sync">Синхронизирай</button><button class="btn" id="logout">Изход</button></section>
         <section class="stats-grid"><div class="stat-card"><span>Регистрирани</span><strong id="registeredStat">0</strong></div><div class="stat-card stat-success"><span>Дошли</span><strong id="checkedInStat">0</strong></div><div class="stat-card"><span>Остават</span><strong id="remainingStat">0</strong></div></section>
-        <section class="scanner card reveal"><div class="section-heading"><div><small>ВХОД</small><h2>Сканирай QR код</h2></div><span class="status status-neutral">Готово</span></div><div class="scanner-viewport"><video class="scanner-frame" id="preview" playsinline></video><span class="scan-guide">Постави QR кода в рамката</span></div><button class="btn btn-primary btn-wide" id="start">Стартирай камерата</button><div class="manual"><input id="manualQr" placeholder="или въведи QR ID за тест" /><button class="btn" id="manualScan">Провери</button></div><p id="status" class="muted">Готово за сканиране.</p></section>
+        <section class="scanner card reveal"><div class="section-heading"><div><small>ВХОД</small><h2>Въведи код за достъп</h2></div><span class="status status-neutral">Готово</span></div><p class="muted">Четирицифреният код е в имейла с билета на участника.</p><div class="manual access-code"><input id="accessCode" inputmode="numeric" autocomplete="one-time-code" maxlength="4" pattern="[0-9]{4}" placeholder="0000" aria-label="Четирицифрен код" /><button class="btn btn-primary" id="checkCode">Провери</button></div><p id="status" class="muted">Готово за проверка.</p></section>
         <section id="result" class="card result-card hidden"></section>
         <section class="card reveal"><div class="row"><div><small>LIVE ROSTER</small><h2>Присъстващи</h2></div><span id="count" class="status status-neutral"></span></div><div class="roster-tools"><input id="attendeeSearch" placeholder="Търси име или компания" /><select id="attendeeFilter"><option value="all">Всички</option><option value="checked">Дошли</option><option value="pending">Чакаме</option></select></div><div id="attendees"></div></section>
       </main>
@@ -64,8 +64,8 @@ function bind() {
   el('#logout').onclick = () => { localStorage.removeItem('event-checkin-session'); boot(); };
   el('#attendeeSearch').oninput = e => { state.query = e.target.value; updateList(); };
   el('#attendeeFilter').onchange = e => { state.filter = e.target.value; updateList(); };
-  el('#manualScan').onclick = () => scan(el('#manualQr').value.trim());
-  el('#start').onclick = startCamera;
+  el('#checkCode').onclick = () => scan(el('#accessCode').value.trim());
+  el('#accessCode').onkeydown = e => { if (e.key === 'Enter') scan(e.target.value.trim()); };
 }
 async function request(path, options = {}) {
   const current = await session();
@@ -85,30 +85,15 @@ async function sync() {
 function showStatus(message, error = false) { const node = el('#status'); if (node) { node.textContent = message; node.className = error ? 'error' : 'muted'; } }
 function showResult(attendee, recommendations = []) {
   const result = el('#result'); result.classList.remove('hidden');
-  result.innerHTML = `<div class="result-banner"><span class="result-icon">✓</span><div><small>УСПЕШЕН CHECK-IN</small><h2>${attendee.name}</h2></div><b class="status status-success">Дошъл</b></div><p>${attendee.company || ''} · ${attendee.role || ''}</p><p class="muted"><strong>QR:</strong> ${attendee.qrId}</p><label>Маса/зона <input id="route" value="${attendee.routingTarget || ''}" placeholder="например Маса 7" /></label><button class="btn btn-primary" id="saveRoute">Запази насочване</button><h3>Препоръчани контакти</h3>${recommendations.length ? recommendations.map(r => `<div class="recommendation"><strong>${r.name}</strong><span>${r.company || ''} · ${r.reason || ''} (${r.score || 0}%)</span></div>`).join('') : '<p class="muted">Няма достатъчно присъстващи за препоръка.</p>'}`;
+  result.innerHTML = `<div class="result-banner"><span class="result-icon">✓</span><div><small>УСПЕШЕН CHECK-IN</small><h2>${attendee.name}</h2></div><b class="status status-success">Дошъл</b></div><p>${attendee.company || ''} · ${attendee.role || ''}</p><p class="muted"><strong>Код:</strong> ${attendee.accessCode}</p><label>Маса/зона <input id="route" value="${attendee.routingTarget || ''}" placeholder="например Маса 7" /></label><button class="btn btn-primary" id="saveRoute">Запази насочване</button><h3>Препоръчани контакти</h3>${recommendations.length ? recommendations.map(r => `<div class="recommendation"><strong>${r.name}</strong><span>${r.company || ''} · ${r.reason || ''} (${r.score || 0}%)</span></div>`).join('') : '<p class="muted">Няма достатъчно присъстващи за препоръка.</p>'}`;
   el('#saveRoute').onclick = async () => { const target = el('#route').value.trim(); if (!mock) await request(`/events/${state.eventId}/attendees/${attendee.id}/routing`, { method: 'PATCH', body: JSON.stringify({ target }) }); attendee.routingTarget = target; showStatus('Насочването е запазено.'); };
 }
-async function scan(qrId) {
-  if (!qrId) return showStatus('Въведи QR ID.', true);
+async function scan(accessCode) {
+  if (!/^\d{4}$/.test(accessCode)) return showStatus('Въведи точно 4 цифри.', true);
   try {
-    const result = mock ? (() => { const attendee = state.attendees.find(a => a.qrId === qrId || a.id === qrId); if (!attendee) throw new Error('QR кодът не е регистриран за това събитие.'); attendee.checkedInAt ||= new Date().toISOString(); return { attendee, recommendations: state.attendees.filter(a => a.checkedInAt && a.id !== attendee.id).slice(0, 5).map(a => ({ ...a, score: 80, reason: 'demo общи интереси' })) }; })() : await request(`/events/${state.eventId}/scan`, { method: 'POST', body: JSON.stringify({ qrId }) });
-    state.selected = result.attendee; updateList(); showResult(result.attendee, result.recommendations); showStatus('QR кодът е проверен успешно.');
+    const result = mock ? (() => { const attendee = state.attendees.find(a => a.accessCode === accessCode); if (!attendee) throw new Error('Кодът не е регистриран за това събитие.'); attendee.checkedInAt ||= new Date().toISOString(); return { attendee, recommendations: state.attendees.filter(a => a.checkedInAt && a.id !== attendee.id).slice(0, 5).map(a => ({ ...a, score: 80, reason: 'demo общи интереси' })) }; })() : await request(`/events/${state.eventId}/scan`, { method: 'POST', body: JSON.stringify({ accessCode }) });
+    state.selected = result.attendee; updateList(); showResult(result.attendee, result.recommendations); showStatus('Кодът е проверен успешно.');
   } catch (e) { showStatus(e.message, true); }
-}
-async function startCamera() {
-  const video = el('#preview');
-  if (!('BarcodeDetector' in window)) return showStatus('Този браузър не поддържа QR сканиране. Използвай Chrome или въведи QR ID ръчно.', true);
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-    video.srcObject = stream; await video.play(); el('#start').textContent = 'Камерата работи';
-    const detector = new BarcodeDetector({ formats: ['qr_code'] });
-    const detect = async () => {
-      if (!video.srcObject) return;
-      try { const codes = await detector.detect(video); if (codes[0]?.rawValue) { stream.getTracks().forEach(track => track.stop()); video.srcObject = null; scan(codes[0].rawValue); return; } } catch { /* camera frame not ready */ }
-      requestAnimationFrame(detect);
-    };
-    detect();
-  } catch (e) { showStatus('Камерата не може да бъде стартирана. Провери HTTPS и разрешенията.', true); }
 }
 
 async function boot() {
