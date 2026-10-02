@@ -20,7 +20,7 @@ function list(value) { return Array.isArray(value) ? value.join(', ') : value ||
 function currentEvent() { return state.events.find(event => event.id === state.eventId) || {}; }
 function tableStats(event = currentEvent()) {
   const total = Number(event.tableCount || event.tables?.length || 0);
-  const capacity = Number(event.tableCapacity || event.tables?.reduce((sum, table) => sum + Number(table.capacity || 0), 0) || 0);
+  const capacity = event.tables?.length ? event.tables.reduce((sum, table) => sum + Number(table.capacity || 0), 0) : total * Number(event.tableCapacity || 0);
   const usedTables = new Set(state.attendees.filter(attendee => attendee.checkedInAt && attendee.routingTarget).map(attendee => attendee.routingTarget)).size;
   return { total, capacity, usedTables, usedSeats: state.attendees.filter(attendee => attendee.checkedInAt).length };
 }
