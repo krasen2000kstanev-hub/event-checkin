@@ -15,6 +15,7 @@ function body(event) {
 }
 
 function key(eventId, sortKey) { return { PK: `EVENT#${eventId}`, SK: sortKey }; }
+function retentionDate(eventDate) { const date = new Date(`${eventDate || new Date().toISOString().slice(0, 10)}T12:00:00Z`); date.setUTCFullYear(date.getUTCFullYear() + 1); return date.toISOString(); }
 
 function isAdmin(event) {
   const groups = event.requestContext?.authorizer?.claims?.['cognito:groups'] || '';
@@ -76,12 +77,14 @@ async function syncEvent(eventId) {
   const payload = await response.json();
   const attendees = payload.attendees || payload;
   if (!Array.isArray(attendees)) throw new Error('Registration API must return an attendees array');
+  const eventMeta = (await db.send(new GetCommand({ TableName, Key: key(eventId, 'META') }))).Item || {};
+  const retentionUntil = eventMeta.retentionUntil || retentionDate(eventMeta.eventDate);
   for (const attendee of attendees) {
     const id = attendee.id;
     const accessCode = String(attendee.access_code || attendee.accessCode || attendee.ticket_code || attendee.ticketCode || attendee.code || '').trim().toUpperCase();
     if (!id || !/^[A-Z0-9]{4}$/.test(accessCode) || !attendee.name) continue;
     const formData = attendee.formData || attendee.form_data || attendee.answers || attendee.responses || {};
-    await db.send(new PutCommand({ TableName, Item: { ...key(eventId, `ATTENDEE#${id}`), entity: 'ATTENDEE', id, accessCode, name: attendee.name, email: attendee.email, company: attendee.company, role: attendee.role, industry: attendee.industry, interests: attendee.interests || [], goals: attendee.goals || [], needs: attendee.needs || [], offers: attendee.offers || [], formData, type: attendee.type, updatedAt: new Date().toISOString() } }));
+    await db.send(new PutCommand({ TableName, Item: { ...key(eventId, `ATTENDEE#${id}`), entity: 'ATTENDEE', id, accessCode, name: attendee.name, email: attendee.email, company: attendee.company, role: attendee.role, industry: attendee.industry, interests: attendee.interests || [], goals: attendee.goals || [], needs: attendee.needs || [], offers: attendee.offers || [], formData, type: attendee.type, eventDate: eventMeta.eventDate || null, retentionUntil, updatedAt: new Date().toISOString() } }));
   }
   return { imported: attendees.length, mode: 'api' };
 }
@@ -100,7 +103,8 @@ exports.handler = async (event) => {
     if (method === 'POST' && path === '/events') {
       if (!isAdmin(event)) return json(403, { error: 'Admin access required' });
       const input = body(event); if (!input.id || !input.name) return json(400, { error: 'id and name are required' });
-      const item = { ...key(input.id, 'META'), entity: 'EVENT', id: input.id, name: input.name, routingEnabled: Boolean(input.routingEnabled), tableCount: Number(input.tableCount || 0), tableCapacity: Number(input.tableCapacity || 0), staff: Array.isArray(input.staff) ? input.staff : [], settings: input.settings || {}, createdAt: new Date().toISOString() };
+      const eventDate = input.eventDate || new Date().toISOString().slice(0, 10);
+      const item = { ...key(input.id, 'META'), entity: 'EVENT', id: input.id, name: input.name, eventDate, retentionUntil: retentionDate(eventDate), routingEnabled: Boolean(input.routingEnabled), tableCount: Number(input.tableCount || 0), tableCapacity: Number(input.tableCapacity || 0), staff: Array.isArray(input.staff) ? input.staff : [], settings: input.settings || {}, createdAt: new Date().toISOString() };
       await db.send(new PutCommand({ TableName, Item: item })); return json(201, { event: item });
     }
     if (method === 'POST' && path.endsWith('/sync')) {

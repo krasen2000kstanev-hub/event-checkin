@@ -6,7 +6,7 @@ const userPoolId = import.meta.env.VITE_COGNITO_USER_POOL_ID || '';
 const clientId = import.meta.env.VITE_COGNITO_CLIENT_ID || '';
 const cognitoRegion = userPoolId.split('_')[0];
 const cognitoUrl = cognitoRegion ? `https://cognito-idp.${cognitoRegion}.amazonaws.com/` : '';
-const state = { eventId: 'demo', events: [{ id: 'demo', name: 'Demo networking event', routingEnabled: true, tableCount: 12, tableCapacity: 8, staff: ['Красен Станев', 'Елена Петрова'] }], attendees: [], selected: null, query: '', filter: 'all', currentStaff: 'Красен Станев' };
+const state = { eventId: 'demo', events: [{ id: 'demo', name: 'Demo networking event', eventDate: '2026-10-15', routingEnabled: true, tableCount: 12, tableCapacity: 8, staff: ['Красен Станев', 'Елена Петрова'] }], attendees: [], selected: null, query: '', filter: 'all', currentStaff: 'Красен Станев' };
 
 const demoAttendees = [
   { id: 'a1', accessCode: 'A7K2', name: 'Анна Георгиева', email: 'anna@example.com', company: 'Alpha Studio', role: 'Основател', industry: 'SaaS', interests: ['автоматизация', 'инвестиции'], goals: ['партньори'], needs: ['продажби'], offers: ['технологии'], formData: { 'Предпочитан тип контакт': 'Стратегически партньор', 'Град': 'София' } },
@@ -20,6 +20,7 @@ function list(value) { return Array.isArray(value) ? value.join(', ') : value ||
 function currentEvent() { return state.events.find(event => event.id === state.eventId) || {}; }
 function initials(name) { return String(name || '?').split(/\s+/).map(part => part[0]).join('').slice(0, 2).toUpperCase(); }
 function formatTime(value) { return value ? new Intl.DateTimeFormat('bg-BG', { hour: '2-digit', minute: '2-digit' }).format(new Date(value)) : '—'; }
+function formatDate(value) { return value ? new Intl.DateTimeFormat('bg-BG', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(`${value}T12:00:00`)) : 'Дата не е зададена'; }
 function tableStats(event = currentEvent()) {
   const total = Number(event.tableCount || event.tables?.length || 0);
   const capacity = event.tables?.length ? event.tables.reduce((sum, table) => sum + Number(table.capacity || 0), 0) : total * Number(event.tableCapacity || 0);
@@ -35,11 +36,11 @@ function render() {
   const staff = event.staff || [state.currentStaff];
   document.querySelector('#app').innerHTML = `
     <section class="app-shell shell">
-      <header class="topbar"><div><small>EVENT CHECK-IN</small><h1>${text(event.name || 'Събитие')}</h1></div><div class="topbar-meta"><span class="status status-success">Онлайн</span><span class="staff-name">Работи: ${text(state.currentStaff)}</span></div></header>
+      <header class="topbar"><div><small>EVENT CHECK-IN</small><h1>${text(event.name || 'Събитие')}</h1><span class="event-date">${text(formatDate(event.eventDate))}</span></div><div class="topbar-meta"><span class="status status-success">Онлайн</span><span class="staff-name">Работи: ${text(state.currentStaff)}</span></div></header>
       <main class="workspace">
-        <section class="toolbar"><select id="eventSelect">${state.events.map(e => `<option value="${e.id}" ${e.id === state.eventId ? 'selected' : ''}>${e.name}</option>`).join('')}</select><button class="btn btn-primary" id="sync">Синхронизирай</button><button class="btn" id="logout">Изход</button></section>
+        <section class="toolbar"><div class="event-picker"><label for="eventSelect">Събитие</label><select id="eventSelect">${state.events.map(e => `<option value="${e.id}" ${e.id === state.eventId ? 'selected' : ''}>${text(e.name)}</option>`).join('')}</select></div><button class="btn btn-primary" id="sync">Синхронизирай</button><button class="btn" id="logout">Изход</button></section>
         <section class="stats-grid"><div class="stat-card"><span>Записани гости</span><strong id="registeredStat">0</strong></div><div class="stat-card stat-success"><span>Дошли гости</span><strong id="checkedInStat">0</strong></div><div class="stat-card"><span>Остават</span><strong id="remainingStat">0</strong></div><div class="stat-card"><span>Заети маси</span><strong id="usedTablesStat">${tables.usedTables}/${tables.total || '—'}</strong></div></section>
-        <section class="event-meta card"><div class="capacity-block"><small>КАПАЦИТЕТ НА СЪБИТИЕТО</small><strong id="capacityStat">${tables.usedSeats}/${tables.capacity || '—'} места</strong><div class="progress"><span id="capacityProgress" style="width:0%"></span></div><span>${tables.total || '—'} маси · ${event.tableCapacity || '—'} места на маса</span></div><div class="team-block"><small>ЕКИП НА СЪБИТИЕТО</small><div class="staff-list">${staff.map(member => `<span class="staff-chip"><i>${initials(member)}</i>${text(member)}</span>`).join('')}</div><span>Проверявате като: ${text(state.currentStaff)}</span></div></section>
+        <section class="event-meta card"><div class="capacity-block"><small>КАПАЦИТЕТ НА СЪБИТИЕТО</small><strong id="capacityStat">${tables.usedSeats}/${tables.capacity || '—'} места</strong><div class="progress"><span id="capacityProgress" style="width:0%"></span></div><span>${tables.total || '—'} маси · ${event.tableCapacity || '—'} места на маса</span></div><div class="team-block"><small>ЕКИП НА СЪБИТИЕТО</small><div class="staff-list">${staff.map(member => `<span class="staff-chip"><i>${initials(member)}</i>${text(member)}</span>`).join('')}</div><span>Проверявате като: ${text(state.currentStaff)}</span></div><div class="event-retention"><small>ДАТА И СЪХРАНЕНИЕ</small><strong>${text(formatDate(event.eventDate))}</strong><span>Регистрациите и check-in данните се пазят минимум 1 година.</span></div></section>
         <section class="scanner card reveal"><div class="section-heading"><div><small>ВХОД</small><h2>Въведи код за достъп</h2></div><span class="status status-neutral">Готово</span></div><p class="muted">Четирисимволният код с главни букви и цифри е в имейла с билета.</p><div class="code-entry" aria-label="Четирисимволен код">${[0, 1, 2, 3].map(index => `<input class="code-part" data-index="${index}" inputmode="text" autocapitalize="characters" autocomplete="one-time-code" spellcheck="false" maxlength="1" pattern="[A-Z0-9]" aria-label="Символ ${index + 1}" />`).join('')}</div><button class="btn btn-primary btn-wide" id="checkCode">Провери кода</button><p id="status" class="muted">Готово за проверка.</p></section>
         <section id="result" class="card result-card hidden"></section>
         <section class="card reveal"><div class="row"><div><small>LIVE ROSTER</small><h2>Присъстващи</h2></div><span id="count" class="status status-neutral"></span></div><div class="roster-tools"><input id="attendeeSearch" placeholder="Търси име или компания" /><select id="attendeeFilter"><option value="all">Всички</option><option value="checked">Дошли</option><option value="pending">Чакаме</option><option value="noTable">Без маса</option></select></div><div id="attendees"></div></section>
@@ -80,7 +81,7 @@ function updateList() {
   el('#attendees').innerHTML = visible.length ? visible.map(a => `<div class="attendee-row ${state.selected?.id === a.id ? 'selected-row' : ''}"><div class="attendee-identity"><i class="avatar">${initials(a.name)}</i><div><strong>${text(a.name)}</strong><span>${text(a.company || '')} · ${text(a.role || '')}</span><small>${a.routingTarget ? text(a.routingTarget) : 'Без маса'} · ${formatTime(a.checkedInAt)}</small></div></div><b class="status ${a.checkedInAt ? 'status-success' : 'status-warning'}">${a.checkedInAt ? 'Дошъл' : 'Чакаме'}</b></div>`).join('') : '<p class="muted">Няма съвпадения.</p>';
 }
 function bind() {
-  el('#eventSelect').onchange = e => { state.eventId = e.target.value; loadAttendees(); };
+  el('#eventSelect').onchange = e => { state.eventId = e.target.value; state.selected = null; render(); loadAttendees(); };
   el('#sync').onclick = sync;
   el('#logout').onclick = () => { localStorage.removeItem('event-checkin-session'); boot(); };
   el('#attendeeSearch').oninput = e => { state.query = e.target.value; updateList(); };
