@@ -18,6 +18,8 @@ function el(selector) { return document.querySelector(selector); }
 function text(value) { return String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char])); }
 function list(value) { return Array.isArray(value) ? value.join(', ') : value || '—'; }
 function currentEvent() { return state.events.find(event => event.id === state.eventId) || {}; }
+function initials(name) { return String(name || '?').split(/\s+/).map(part => part[0]).join('').slice(0, 2).toUpperCase(); }
+function formatTime(value) { return value ? new Intl.DateTimeFormat('bg-BG', { hour: '2-digit', minute: '2-digit' }).format(new Date(value)) : '—'; }
 function tableStats(event = currentEvent()) {
   const total = Number(event.tableCount || event.tables?.length || 0);
   const capacity = event.tables?.length ? event.tables.reduce((sum, table) => sum + Number(table.capacity || 0), 0) : total * Number(event.tableCapacity || 0);
@@ -30,16 +32,17 @@ function profileRows(attendee) {
 }
 function render() {
   const event = currentEvent(); const tables = tableStats(event);
+  const staff = event.staff || [state.currentStaff];
   document.querySelector('#app').innerHTML = `
     <section class="app-shell shell">
       <header class="topbar"><div><small>EVENT CHECK-IN</small><h1>${text(event.name || 'Събитие')}</h1></div><div class="topbar-meta"><span class="status status-success">Онлайн</span><span class="staff-name">Работи: ${text(state.currentStaff)}</span></div></header>
       <main class="workspace">
         <section class="toolbar"><select id="eventSelect">${state.events.map(e => `<option value="${e.id}" ${e.id === state.eventId ? 'selected' : ''}>${e.name}</option>`).join('')}</select><button class="btn btn-primary" id="sync">Синхронизирай</button><button class="btn" id="logout">Изход</button></section>
         <section class="stats-grid"><div class="stat-card"><span>Записани гости</span><strong id="registeredStat">0</strong></div><div class="stat-card stat-success"><span>Дошли гости</span><strong id="checkedInStat">0</strong></div><div class="stat-card"><span>Остават</span><strong id="remainingStat">0</strong></div><div class="stat-card"><span>Заети маси</span><strong id="usedTablesStat">${tables.usedTables}/${tables.total || '—'}</strong></div></section>
-        <section class="event-meta card"><div><small>КАПАЦИТЕТ НА СЪБИТИЕТО</small><strong id="capacityStat">${tables.usedSeats}/${tables.capacity || '—'} места</strong><span>${tables.total || '—'} маси · ${event.tableCapacity || '—'} места на маса</span></div><div><small>ЕКИП НА СЪБИТИЕТО</small><strong>${text((event.staff || [state.currentStaff]).join(', '))}</strong><span>Текущ потребител: ${text(state.currentStaff)}</span></div></section>
-        <section class="scanner card reveal"><div class="section-heading"><div><small>ВХОД</small><h2>Въведи код за достъп</h2></div><span class="status status-neutral">Готово</span></div><p class="muted">Четирисимволният код с главни букви и цифри е в имейла с билета.</p><div class="manual access-code"><input id="accessCode" inputmode="text" autocapitalize="characters" autocomplete="one-time-code" spellcheck="false" maxlength="4" pattern="[A-Z0-9]{4}" placeholder="A7K2" aria-label="Четирисимволен код" /><button class="btn btn-primary" id="checkCode">Провери</button></div><p id="status" class="muted">Готово за проверка.</p></section>
+        <section class="event-meta card"><div class="capacity-block"><small>КАПАЦИТЕТ НА СЪБИТИЕТО</small><strong id="capacityStat">${tables.usedSeats}/${tables.capacity || '—'} места</strong><div class="progress"><span id="capacityProgress" style="width:0%"></span></div><span>${tables.total || '—'} маси · ${event.tableCapacity || '—'} места на маса</span></div><div class="team-block"><small>ЕКИП НА СЪБИТИЕТО</small><div class="staff-list">${staff.map(member => `<span class="staff-chip"><i>${initials(member)}</i>${text(member)}</span>`).join('')}</div><span>Проверявате като: ${text(state.currentStaff)}</span></div></section>
+        <section class="scanner card reveal"><div class="section-heading"><div><small>ВХОД</small><h2>Въведи код за достъп</h2></div><span class="status status-neutral">Готово</span></div><p class="muted">Четирисимволният код с главни букви и цифри е в имейла с билета.</p><div class="code-entry" aria-label="Четирисимволен код">${[0, 1, 2, 3].map(index => `<input class="code-part" data-index="${index}" inputmode="text" autocapitalize="characters" autocomplete="one-time-code" spellcheck="false" maxlength="1" pattern="[A-Z0-9]" aria-label="Символ ${index + 1}" />`).join('')}</div><button class="btn btn-primary btn-wide" id="checkCode">Провери кода</button><p id="status" class="muted">Готово за проверка.</p></section>
         <section id="result" class="card result-card hidden"></section>
-        <section class="card reveal"><div class="row"><div><small>LIVE ROSTER</small><h2>Присъстващи</h2></div><span id="count" class="status status-neutral"></span></div><div class="roster-tools"><input id="attendeeSearch" placeholder="Търси име или компания" /><select id="attendeeFilter"><option value="all">Всички</option><option value="checked">Дошли</option><option value="pending">Чакаме</option></select></div><div id="attendees"></div></section>
+        <section class="card reveal"><div class="row"><div><small>LIVE ROSTER</small><h2>Присъстващи</h2></div><span id="count" class="status status-neutral"></span></div><div class="roster-tools"><input id="attendeeSearch" placeholder="Търси име или компания" /><select id="attendeeFilter"><option value="all">Всички</option><option value="checked">Дошли</option><option value="pending">Чакаме</option><option value="noTable">Без маса</option></select></div><div id="attendees"></div></section>
       </main>
     </section>`;
   updateList(); bind();
@@ -51,12 +54,12 @@ function renderLogin() {
 function session() {
   const stored = localStorage.getItem('event-checkin-session');
   if (!stored) return Promise.resolve(null);
-  try { const current = JSON.parse(stored); return Promise.resolve(current.expiresAt > Date.now() ? current : null); } catch { return Promise.resolve(null); }
+  try { const current = JSON.parse(stored); if (current.expiresAt > Date.now()) { state.currentStaff = current.staffName || state.currentStaff; return Promise.resolve(current); } return Promise.resolve(null); } catch { return Promise.resolve(null); }
 }
 function login(email, password) {
   const status = el('#loginStatus');
   fetch(cognitoUrl, { method: 'POST', headers: { 'content-type': 'application/x-amz-json-1.1', 'x-amz-target': 'AWSCognitoIdentityProviderService.InitiateAuth' }, body: JSON.stringify({ AuthFlow: 'USER_PASSWORD_AUTH', ClientId: clientId, AuthParameters: { USERNAME: email, PASSWORD: password } }) })
-    .then(async response => { const data = await response.json(); if (!response.ok) throw new Error(data.message || 'Входът не успя.'); localStorage.setItem('event-checkin-session', JSON.stringify({ accessToken: data.AuthenticationResult.AccessToken, idToken: data.AuthenticationResult.IdToken, expiresAt: Date.now() + (data.AuthenticationResult.ExpiresIn * 1000) })); boot(); })
+    .then(async response => { const data = await response.json(); if (!response.ok) throw new Error(data.message || 'Входът не успя.'); localStorage.setItem('event-checkin-session', JSON.stringify({ accessToken: data.AuthenticationResult.AccessToken, idToken: data.AuthenticationResult.IdToken, staffName: email, expiresAt: Date.now() + (data.AuthenticationResult.ExpiresIn * 1000) })); boot(); })
     .catch(error => { status.textContent = error.message; status.className = 'error'; });
 }
 function updateList() {
@@ -67,13 +70,14 @@ function updateList() {
   el('#count').textContent = `${checked}/${state.attendees.length} дошли`;
   const tables = tableStats(); const usedTables = el('#usedTablesStat'); if (usedTables) usedTables.textContent = `${tables.usedTables}/${tables.total || '—'}`;
   const capacity = el('#capacityStat'); if (capacity) capacity.textContent = `${tables.usedSeats}/${tables.capacity || '—'} места`;
+  const progress = el('#capacityProgress'); if (progress) progress.style.width = `${tables.capacity ? Math.min(100, Math.round((tables.usedSeats / tables.capacity) * 100)) : 0}%`;
   const query = state.query.toLowerCase();
   const visible = state.attendees.filter(a => {
     const matchesQuery = !query || `${a.name} ${a.company || ''} ${a.email || ''}`.toLowerCase().includes(query);
-    const matchesFilter = state.filter === 'all' || (state.filter === 'checked' ? a.checkedInAt : !a.checkedInAt);
+    const matchesFilter = state.filter === 'all' || (state.filter === 'checked' ? a.checkedInAt : state.filter === 'noTable' ? !a.routingTarget : !a.checkedInAt);
     return matchesQuery && matchesFilter;
   });
-  el('#attendees').innerHTML = visible.length ? visible.map(a => `<div class="attendee-row ${state.selected?.id === a.id ? 'selected-row' : ''}"><div><strong>${text(a.name)}</strong><span>${text(a.company || '')} · ${text(a.role || '')}</span></div><b class="status ${a.checkedInAt ? 'status-success' : 'status-warning'}">${a.checkedInAt ? 'Дошъл' : 'Чакаме'}</b></div>`).join('') : '<p class="muted">Няма съвпадения.</p>';
+  el('#attendees').innerHTML = visible.length ? visible.map(a => `<div class="attendee-row ${state.selected?.id === a.id ? 'selected-row' : ''}"><div class="attendee-identity"><i class="avatar">${initials(a.name)}</i><div><strong>${text(a.name)}</strong><span>${text(a.company || '')} · ${text(a.role || '')}</span><small>${a.routingTarget ? text(a.routingTarget) : 'Без маса'} · ${formatTime(a.checkedInAt)}</small></div></div><b class="status ${a.checkedInAt ? 'status-success' : 'status-warning'}">${a.checkedInAt ? 'Дошъл' : 'Чакаме'}</b></div>`).join('') : '<p class="muted">Няма съвпадения.</p>';
 }
 function bind() {
   el('#eventSelect').onchange = e => { state.eventId = e.target.value; loadAttendees(); };
@@ -81,9 +85,10 @@ function bind() {
   el('#logout').onclick = () => { localStorage.removeItem('event-checkin-session'); boot(); };
   el('#attendeeSearch').oninput = e => { state.query = e.target.value; updateList(); };
   el('#attendeeFilter').onchange = e => { state.filter = e.target.value; updateList(); };
-  el('#checkCode').onclick = () => scan(el('#accessCode').value.trim());
-  el('#accessCode').oninput = e => { e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4); };
-  el('#accessCode').onkeydown = e => { if (e.key === 'Enter') scan(e.target.value.trim()); };
+  const parts = [...document.querySelectorAll('.code-part')];
+  const readCode = () => parts.map(part => part.value).join('');
+  parts.forEach((part, index) => { part.oninput = e => { e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(-1); if (e.target.value && parts[index + 1]) parts[index + 1].focus(); }; part.onkeydown = e => { if (e.key === 'Backspace' && !e.target.value && parts[index - 1]) parts[index - 1].focus(); if (e.key === 'Enter') scan(readCode()); }; });
+  el('#checkCode').onclick = () => scan(readCode());
 }
 async function request(path, options = {}) {
   const current = await session();
@@ -103,14 +108,14 @@ async function sync() {
 function showStatus(message, error = false) { const node = el('#status'); if (node) { node.textContent = message; node.className = error ? 'error' : 'muted'; } }
 function showResult(attendee, recommendations = []) {
   const result = el('#result'); result.classList.remove('hidden');
-  result.innerHTML = `<div class="result-banner"><span class="result-icon">✓</span><div><small>УСПЕШЕН CHECK-IN</small><h2>${text(attendee.name)}</h2></div><b class="status status-success">Дошъл</b></div><p>${text(attendee.company || '')} · ${text(attendee.role || '')}</p><p class="muted"><strong>Код:</strong> ${text(attendee.accessCode)}</p><div class="profile-grid">${profileRows(attendee)}</div><label>Маса/зона <input id="route" value="${text(attendee.routingTarget || '')}" placeholder="например Маса 7" /></label><button class="btn btn-primary" id="saveRoute">Запази насочване</button><h3>Препоръчани контакти</h3>${recommendations.length ? recommendations.map(r => `<div class="recommendation"><strong>${text(r.name)}</strong><span>${text(r.company || '')} · ${text(r.reason || '')} (${r.score || 0}%)</span></div>`).join('') : '<p class="muted">Няма достатъчно присъстващи за препоръка.</p>'}`;
-  el('#saveRoute').onclick = async () => { const target = el('#route').value.trim(); if (!mock) await request(`/events/${state.eventId}/attendees/${attendee.id}/routing`, { method: 'PATCH', body: JSON.stringify({ target }) }); attendee.routingTarget = target; showStatus('Насочването е запазено.'); };
+  result.innerHTML = `<div class="result-banner"><span class="result-icon">✓</span><div><small>УСПЕШЕН CHECK-IN</small><h2>${text(attendee.name)}</h2></div><b class="status status-success">Дошъл</b></div><p>${text(attendee.company || '')} · ${text(attendee.role || '')}</p><div class="checkin-meta"><span>Код: <strong>${text(attendee.accessCode)}</strong></span><span>Час: <strong>${formatTime(attendee.checkedInAt)}</strong></span><span>Проверил: <strong>${text(attendee.checkedInBy || state.currentStaff)}</strong></span></div><div class="profile-grid">${profileRows(attendee)}</div><label>Маса/зона <input id="route" value="${text(attendee.routingTarget || '')}" placeholder="например Маса 7" /></label><button class="btn btn-primary" id="saveRoute">Запази насочване</button><h3>Препоръчани контакти</h3>${recommendations.length ? recommendations.map(r => `<div class="recommendation"><strong>${text(r.name)}</strong><span>${text(r.company || '')} · ${text(r.reason || '')} (${r.score || 0}%)</span></div>`).join('') : '<p class="muted">Няма достатъчно присъстващи за препоръка.</p>'}`;
+  el('#saveRoute').onclick = async () => { const target = el('#route').value.trim(); if (!mock) await request(`/events/${state.eventId}/attendees/${attendee.id}/routing`, { method: 'PATCH', body: JSON.stringify({ target }) }); attendee.routingTarget = target; updateList(); showStatus('Насочването е запазено.'); };
 }
 async function scan(accessCode) {
   accessCode = accessCode.toUpperCase();
   if (!/^[A-Z0-9]{4}$/.test(accessCode)) return showStatus('Въведи точно 4 главни букви или цифри.', true);
   try {
-    const result = mock ? (() => { const attendee = state.attendees.find(a => a.accessCode === accessCode); if (!attendee) throw new Error('Кодът не е регистриран за това събитие.'); attendee.checkedInAt ||= new Date().toISOString(); return { attendee, recommendations: state.attendees.filter(a => a.checkedInAt && a.id !== attendee.id).slice(0, 5).map(a => ({ ...a, score: 80, reason: 'demo общи интереси' })) }; })() : await request(`/events/${state.eventId}/scan`, { method: 'POST', body: JSON.stringify({ accessCode }) });
+    const result = mock ? (() => { const attendee = state.attendees.find(a => a.accessCode === accessCode); if (!attendee) throw new Error('Кодът не е регистриран за това събитие.'); attendee.checkedInAt ||= new Date().toISOString(); attendee.checkedInBy ||= state.currentStaff; return { attendee, recommendations: state.attendees.filter(a => a.checkedInAt && a.id !== attendee.id).slice(0, 5).map(a => ({ ...a, score: 80, reason: 'demo общи интереси' })) }; })() : await request(`/events/${state.eventId}/scan`, { method: 'POST', body: JSON.stringify({ accessCode }) });
     state.selected = result.attendee; updateList(); showResult(result.attendee, result.recommendations); showStatus('Кодът е проверен успешно.');
   } catch (e) { showStatus(e.message, true); }
 }

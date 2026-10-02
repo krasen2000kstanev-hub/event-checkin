@@ -126,6 +126,7 @@ exports.handler = async (event) => {
             ExpressionAttributeValues: { ':now': now, ':by': event.requestContext?.authorizer?.claims?.email || 'staff' }
           }));
           attendee.checkedInAt = now;
+          attendee.checkedInBy = event.requestContext?.authorizer?.claims?.email || 'staff';
         } catch (error) {
           if (error.name !== 'ConditionalCheckFailedException') throw error;
           const current = await db.send(new GetCommand({ TableName, Key: key(eventId, `ATTENDEE#${attendee.id}`) }));
